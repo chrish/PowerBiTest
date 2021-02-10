@@ -13,6 +13,10 @@ namespace DaxTest
 
         public TestTableDefinitions()
         {
+            // NOTE: The port is random, but can be found by running the below statements in the Windows console. 
+            // Add the PID of the running process to get the proper port. Power BI must be running for this to work.
+            // TASKLIST /FI "imagename eq msmdsrv.exe" /FI "sessionname eq console"
+            // netstat /ano | findstr <PID>
             _connectionString = "DataSource=localhost:50484";
         }
 
