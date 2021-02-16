@@ -55,7 +55,6 @@
   <ItemGroup>
     <Compile Include="Connector.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
-    <Compile Include="TestTableDefinitions.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />

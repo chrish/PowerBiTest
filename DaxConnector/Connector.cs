@@ -11,6 +11,11 @@ using System.Text.RegularExpressions;
 
 namespace DaxConnector
 {
+    /// <summary>
+    /// This is a basic connector class allowing us to connect to a local Analysis Service instance. 
+    /// This is launched in the background whenever a Power BI Desktop report is opened, and can be used 
+    /// as a basis for testing, at least for a POC. 
+    /// </summary>
     public class Connector
     {
         private string _connectionString;
@@ -18,6 +23,8 @@ namespace DaxConnector
 
         public Connector(string connString)
         {
+            // This is the process name of the analysis services executable we're looking 
+            // for when trying to find the correct port. 
             _processName = "msmdsrv";
 
             int id = GetLocalPid();
@@ -27,6 +34,10 @@ namespace DaxConnector
             _connectionString = connString + ":" + port;
         }
 
+        /// <summary>
+        /// Find the pid of the running Analysis Service
+        /// </summary>
+        /// <returns></returns>
         protected int GetLocalPid()
         {
             var processes = Process.GetProcessesByName(_processName);
@@ -41,15 +52,14 @@ namespace DaxConnector
                 throw new Exception("PID not found");
             }
 
-            //{ }
-            // Kjør netstat og les output...
-            //https://www.cheynewallace.com/get-active-ports-and-associated-process-names-in-c/
-
             return id;
         }
 
         /// <summary>
         /// Get the port of the local Analysis Services pid. 
+        /// In case of problems, ensure that only one instance of 
+        /// Power BI Desktop is running. Not sure if it launches 
+        /// multiple instances, but this is what I've tested on. 
         /// </summary>
         /// <param name="pid"></param>
         /// <returns></returns>
@@ -59,7 +69,7 @@ namespace DaxConnector
             using (Process p = new Process())
             {
                 ProcessStartInfo ps = new ProcessStartInfo();
-                ps.Arguments = string.Format("-a -n -o", pid);
+                ps.Arguments = "-a -n -o";
                 ps.FileName = "netstat.exe";
                 ps.UseShellExecute = false;
                 ps.RedirectStandardOutput = true;
@@ -109,14 +119,14 @@ namespace DaxConnector
         }
 
         /// <summary>
-        /// Runs a DAX query against the connected source
+        /// Runs a DAX query against the connected source. 
+        /// Unless wrapped in a statement that returns a tabular dataset this will fail. 
         /// </summary>
         /// <param name="query"></param>
         /// <returns></returns>
         public async Task<List<KeyValuePair<string, string>[]>> RunQueryAsync(string query)
         {
             Task<DataTable> results = ExecuteDaxQueryAsync(query);
-
             List<KeyValuePair<string, string>[]> rows = new List<KeyValuePair<string, string>[]>();
 
             await results;
@@ -135,6 +145,11 @@ namespace DaxConnector
             return rows;
         }
 
+        /// <summary>
+        /// Executes a query that returns a tabular result. 
+        /// </summary>
+        /// <param name="query"></param>
+        /// <returns></returns>
         private async Task<DataTable> ExecuteDaxQueryAsync(string query)
         {
             var tabularResults = new DataTable();
@@ -152,6 +167,12 @@ namespace DaxConnector
             return tabularResults;
         }
 
+        /// <summary>
+        /// This was supposed to be the starting point of the scalar query
+        /// execution. Doesnt work, see the measure test class for more info. 
+        /// </summary>
+        /// <param name="query"></param>
+        /// <returns></returns>
         public async Task<string> RunQueryAltAsync(string query)
         {
             var results = ExecuteDaxQueryNonTabularAsync(query);
@@ -159,10 +180,15 @@ namespace DaxConnector
             return results.Result;
         }
 
+        /// <summary>
+        /// Was supposed to execute a scalar query, doesn't work, 
+        /// see the measure test class for more info. 
+        /// </summary>
+        /// <param name="query"></param>
+        /// <returns></returns>
         private async Task<string> ExecuteDaxQueryNonTabularAsync(string query)
         {
             string data = "ERROR";
-            var tabularResults = new DataTable();
 
             using (var connection = new AdomdConnection(_connectionString))
             {
@@ -171,19 +197,16 @@ namespace DaxConnector
                 AdomdCommand cmd = new AdomdCommand(query);
                 cmd.Connection = connection;
 
-                // Doesn't work. Not sure why, but it appears not to be implemented... 
+                // Doesn't work. Not sure why, but it appears not to be implemented.
+                // If run, it will crash upon execute, with no data returned. 
                 data = (string)cmd.ExecuteScalar();
-
-                //var currentDataAdapter = new AdomdDataAdapter(query, connection);
-                //currentDataAdapter.Fill(tabularResults);
             }
 
             return data;
         }
 
-
         /// <summary>
-        /// Get a list of all the measures
+        /// Get a list of all the measures in a model. Will contain Name and DAX
         /// </summary>
         /// <returns></returns>
         public async Task<Dictionary<string, List<Measure>>> GetDaxMeasuresAsync()

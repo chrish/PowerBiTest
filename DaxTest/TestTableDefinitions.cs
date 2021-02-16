@@ -14,10 +14,9 @@ namespace DaxTest
 
         public TestTableDefinitions()
         {
-            // NOTE: The port is random, but can be found by running the below statements in the Windows console. 
-            // Add the PID of the running process to get the proper port. Power BI must be running for this to work.
-            // TASKLIST /FI "imagename eq msmdsrv.exe" /FI "sessionname eq console"
-            // netstat /ano | findstr <PID>
+            // Note: The source runs on a random port when testing this locally. This is handled by the Connector.cs class automatically. 
+            // This has only been tested with one instance of Power BI Desktop open, so if in doubt, close all instances except for the 
+            // one with the sample model. 
             _connectionString = "DataSource=localhost";
         }
 
@@ -27,7 +26,7 @@ namespace DaxTest
         /// Table has the following structure: 
         /// 
         /// fact_data[Item]
-        /// fact_data[Value]
+        /// fact_data[ItemVal]
         /// fact_data[Postcode-Location]
         /// fact_data[Firstname]
         /// fact_data[Lastname]
@@ -38,7 +37,8 @@ namespace DaxTest
         /// Where Postcode is the result of running the following DAX:
         /// left([Postcode-Location], search("-", [Postcode-Location])-1)
         /// 
-        /// We want to verify that the result is correct for all cases.
+        /// By running the test for every row, we verify the result of the DAX for all cases. There is no need to 
+        /// obtain and test the actual DAX, as we know what column to test and for what. 
         /// </summary>
         [TestMethod]
         public void TestPostCodeLocationSplit()
@@ -51,7 +51,7 @@ namespace DaxTest
 
             data.Wait();
 
-            // List<KeyValuePair<string, string>[]>
+            // Loop over all rows, checking if fact_data[Postcode] matches the manually split postcode.
             foreach (var row in data.Result)
             {
                 var postLoc = (from r in row where r.Key == "fact_data[Postcode-Location]" select r.Value).FirstOrDefault();
@@ -103,73 +103,17 @@ namespace DaxTest
             // Check for uniqueness:
             List<string> uniqueDimCountries = dimCountries.Distinct().ToList<string>();
 
-            // If the DAX is correct, the count of both should be identical:
+            // If the DAX is correct, the count of unique countries in the model table 
+            // and the manually calculated count should be the same:
             Assert.AreEqual(uniqueDimCountries.Count, dimCountries.Count);
 
 
-            // Then; check if all countries in fact_data are in dim_countries:
+            // Then; check if all countries in fact_data are in dim_countries.
+            // This allows us to verify that the DAX creating dim_countries is correct. 
             Assert.IsTrue(!FactTableCountries.Except(dimCountries).Any());
 
-            // Just for fun, check that all the entries in dim_countries are also in the fact table:
+            // Just for fun, check that all the entries in dim_countries are also in the fact table. 
             Assert.IsTrue(!dimCountries.Except(FactTableCountries).Any());
-        }
-
-
-        /// <summary>
-        /// Does nothing useful other than to check that we can get the measure name and expression.
-        /// </summary>
-        [TestMethod]
-        public void TestMeasures()
-        {
-            var conn = new Connector(_connectionString);
-
-            var measures = conn.GetDaxMeasuresAsync();
-
-            measures.Wait();
-
-            Dictionary<string, string> extractedMeasures = new Dictionary<string, string>();
-
-            foreach (KeyValuePair<string, List<Measure>> f in measures.Result)
-            {
-                //Todo: Measures! https://endjin.com/blog/2020/02/azure-analysis-services-how-to-query-all-the-measures-in-a-model-from-net
-                foreach (var m in f.Value)
-                {
-                    string key = m.Name;
-
-                    if (extractedMeasures.ContainsKey(key))
-                    {
-                        extractedMeasures.Add(key, m.Expression);
-                    }
-                    else
-                    {
-                        extractedMeasures[key] = m.Expression;
-                    }
-                }
-            }
-
-            Assert.IsTrue(extractedMeasures.Count > 0);
-
-            // Run through the extracted measures here
-            foreach (var k in extractedMeasures)
-            {
-                string daxBase = @"evaluate(row(""measure_result"", __MEASURE__))";
-                string query = daxBase.Replace("__MEASURE__", k.Value);
-
-                Task<List<KeyValuePair<string, string>[]>> measureData = conn.RunQueryAsync(query);
-                measureData.Wait();
-                
-                string measureValue = measureData.Result.First()[0].Value;
-
-                switch (k.Key)
-                {
-                    case ("NumItems"):
-                        Assert.AreEqual(measureValue, "3");
-                        break;
-                    case ("SumItems"):
-                        Assert.AreEqual(measureValue, "11050");
-                        break;
-                }
-            }
         }
     }
 }
