@@ -40,6 +40,7 @@ namespace DaxTest
         /// 
         /// We want to verify that the result is correct for all cases.
         /// </summary>
+        
         [TestMethod]
         public void TestPostCodeLocationSplit()
         {
@@ -134,7 +135,7 @@ namespace DaxTest
                 //Todo: Measures! https://endjin.com/blog/2020/02/azure-analysis-services-how-to-query-all-the-measures-in-a-model-from-net
                 foreach (var m in f.Value)
                 {
-                    string key = m.Name;
+                    string key = f.Key + "." + m.Name;
 
                     if (extractedMeasures.ContainsKey(key))
                     {
@@ -149,27 +150,17 @@ namespace DaxTest
 
             Assert.IsTrue(extractedMeasures.Count > 0);
 
-            // Run through the extracted measures here
-            foreach (var k in extractedMeasures)
-            {
-                string daxBase = @"evaluate(row(""measure_result"", __MEASURE__))";
-                string query = daxBase.Replace("__MEASURE__", k.Value);
+            string query = $@"EVALUATE({extractedMeasures.First().Value})";
+            query = @"COUNT('fact_data'[Item])";
+            //query = "\"1\"";
 
-                Task<List<KeyValuePair<string, string>[]>> measureData = conn.RunQueryAsync(query);
-                measureData.Wait();
-                
-                string measureValue = measureData.Result.First()[0].Value;
+            //query = $@"EVALUATE(SUMMARIZE(fact_data, fact_data[Item], ""Sum"", sum('fact_data'[Value])))";
 
-                switch (k.Key)
-                {
-                    case ("NumItems"):
-                        Assert.AreEqual(measureValue, "3");
-                        break;
-                    case ("SumItems"):
-                        Assert.AreEqual(measureValue, "11050");
-                        break;
-                }
-            }
+            Task<string> measureData = conn.RunQueryAltAsync(query);
+
+            measureData.Wait();
+
+            var data = measureData.Result;
         }
     }
 }
